@@ -842,7 +842,7 @@ class ApiService {
   public async getReport(scanId: string): Promise<AssessmentReport> {
     if (!this.isDemoMode && this.connectionStatus.connected) {
       try {
-        const raw = await this.liveFetch<AssessmentReport>(`/api/v1/reports/${scanId}`);
+        const raw = await this.liveFetch<AssessmentReport>(`/api/v1/reports/${scanId}/export?format=json`);
         return raw;
       } catch {
         // Backend report endpoint is reported as placeholder, fallback to dynamically generating report from active findings
