@@ -44,17 +44,26 @@ class TargetAgentAdapter:
                 output=f"ImportError: target_agent package not found: {e}",
                 metadata={"status": "failed", "error": "ImportError"}
             )
-            
         test_id = request.metadata.get("test_id", request.session_id)
         use_mock = request.metadata.get("use_mock", False)
+        system_prompt_override = request.metadata.get("system_prompt_override")
         
         model_override = MockAgentModel() if use_mock else None
         
+        config = None
+        if system_prompt_override:
+            from target_agent.config import get_config
+            config = get_config()
+            config.system_prompt_override = system_prompt_override
+        
         try:
+            chat_history = request.metadata.get("chat_history")
             result_dict = run_agent(
                 user_input=request.input_text,
                 test_id=test_id,
-                model_override=model_override
+                model_override=model_override,
+                config=config,
+                chat_history=chat_history
             )
             
             output_text = result_dict.get("response")

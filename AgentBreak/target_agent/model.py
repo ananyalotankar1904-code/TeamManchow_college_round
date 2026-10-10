@@ -65,21 +65,37 @@ class OpenAIAgentModel(BaseAgentModel):
 
     def __init__(self, config: Optional[AgentConfig] = None):
         self.config = config or get_config()
-        if not self.config.openai_api_key:
+        
+        provider = self.config.model_provider.lower()
+        if provider == "groq":
+            api_key = self.config.groq_api_key
+            model_name = self.config.groq_model
+            base_url = "https://api.groq.com/openai/v1"
+            self.provider_name = "Groq"
+        else:
+            api_key = self.config.openai_api_key
+            model_name = self.config.openai_model
+            base_url = None
+            self.provider_name = "OpenAI"
+
+        if not api_key:
             raise ValueError(
-                "Cannot initialize OpenAIAgentModel: OPENAI_API_KEY is not configured. "
+                f"Cannot initialize OpenAIAgentModel: API key for {self.provider_name} is not configured. "
                 "Provide an API key or use MockAgentModel."
             )
+
+        self.model_name = model_name
 
         try:
             from openai import OpenAI
             self.client = OpenAI(
-                api_key=self.config.openai_api_key,
+                api_key=api_key,
+                base_url=base_url,
                 timeout=self.config.model_timeout_seconds,
                 max_retries=2,
             )
         except Exception as e:
-            raise ModelExecutionError(f"Failed to initialize OpenAI client: {str(e)}")
+            raise ModelExecutionError(f"Failed to initialize {self.provider_name} client: {str(e)}")
 
     def invoke(
         self,
@@ -103,7 +119,7 @@ class OpenAIAgentModel(BaseAgentModel):
             formatted_messages.append(formatted_msg)
 
         kwargs: Dict[str, Any] = {
-            "model": self.config.openai_model,
+            "model": self.model_name,
             "messages": formatted_messages,
         }
 
@@ -114,13 +130,13 @@ class OpenAIAgentModel(BaseAgentModel):
         try:
             response = self.client.chat.completions.create(**kwargs)
         except AuthenticationError as e:
-            raise ModelExecutionError(f"OpenAI Authentication failed: {str(e)}") from e
+            raise ModelExecutionError(f"{self.provider_name} Authentication failed: {str(e)}") from e
         except RateLimitError as e:
-            raise ModelExecutionError(f"OpenAI Rate limit exceeded: {str(e)}") from e
+            raise ModelExecutionError(f"{self.provider_name} Rate limit exceeded: {str(e)}") from e
         except APITimeoutError as e:
-            raise ModelExecutionError(f"OpenAI request timed out after {self.config.model_timeout_seconds}s: {str(e)}") from e
+            raise ModelExecutionError(f"{self.provider_name} request timed out after {self.config.model_timeout_seconds}s: {str(e)}") from e
         except APIError as e:
-            raise ModelExecutionError(f"OpenAI API error: {str(e)}") from e
+            raise ModelExecutionError(f"{self.provider_name} API error: {str(e)}") from e
         except Exception as e:
             raise ModelExecutionError(f"Unexpected error during model invocation: {str(e)}") from e
 

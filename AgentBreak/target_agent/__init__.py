@@ -28,6 +28,7 @@ def run_agent(
     test_id: str = "default-test",
     model_override: Optional[BaseAgentModel] = None,
     config: Optional[AgentConfig] = None,
+    chat_history: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, Any]:
     """
     Execute one test against the target customer-support agent.
@@ -57,5 +58,6 @@ def run_agent(
         test_id=test_id,
         model_override=model_override,
         config=config,
+        chat_history=chat_history,
     )
     return result.to_dict()

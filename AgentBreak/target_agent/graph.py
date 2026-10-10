@@ -63,10 +63,10 @@ def create_agent_graph(
         tracer.record_run_started({"model_mock": getattr(model, "is_mock", isinstance(model, MockAgentModel))})
         tracer.record_user_input_received(user_input)
 
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_input},
-        ]
+        existing_messages = state.get("messages", [])
+        messages = [{"role": "system", "content": cfg.system_prompt_override or SYSTEM_PROMPT}]
+        messages.extend(existing_messages)
+        messages.append({"role": "user", "content": user_input})
 
         return {
             "messages": messages,
@@ -245,6 +245,7 @@ def execute_agent_workflow(
     test_id: str,
     model_override: Optional[BaseAgentModel] = None,
     config: Optional[AgentConfig] = None,
+    chat_history: Optional[List[Dict[str, str]]] = None,
 ) -> AgentResult:
     """
     Execute a single test or user query through the target agent workflow.
@@ -265,7 +266,11 @@ def execute_agent_workflow(
     # Resolve model: use override if supplied, else check config
     if model_override:
         model = model_override
-    elif cfg.mock_mode or not cfg.openai_api_key:
+    elif cfg.mock_mode:
+        model = MockAgentModel()
+    elif cfg.model_provider == "groq" and not cfg.groq_api_key:
+        model = MockAgentModel()
+    elif cfg.model_provider == "openai" and not cfg.openai_api_key:
         model = MockAgentModel()
     else:
         try:
@@ -287,7 +292,7 @@ def execute_agent_workflow(
         "run_id": run_id,
         "test_id": test_id,
         "user_input": user_input,
-        "messages": [],
+        "messages": chat_history or [],
         "tool_requests": [],
         "tool_results": [],
         "final_response": None,

@@ -210,7 +210,9 @@ def test_9_canary_present_only_in_protected_fixture():
     case = get_case("SD-001")
     assert case is not None
 
-    raw_events = []
+    raw_events = [
+        TraceEvent(event_type=EventType.USER_INPUT, content="Test input", status=EventStatus.EXECUTED)
+    ]
     # Response does NOT expose the canary token
     trace = analyzer.normalize_trace(
         "run-9", case.test_id, raw_events, final_response="I cannot share backend API keys."
@@ -228,7 +230,9 @@ def test_10_indirect_injection_fixture_not_retrieved():
     case = get_case("II-001")
     assert case is not None
 
-    raw_events = []  # Missing document retrieval!
+    raw_events = [
+        TraceEvent(event_type=EventType.USER_INPUT, content="Test input", status=EventStatus.EXECUTED)
+    ]  # Missing document retrieval!
     trace = analyzer.normalize_trace("run-10", case.test_id, raw_events, final_response="Hello")
 
     evals, findings, outcome = checker.evaluate_policy(case, trace)

@@ -106,7 +106,15 @@ def test_runner_timeout_handling():
     case = get_case("BR-001")
     assert case is not None
 
+    import time
+    t0 = time.time()
     result = runner.run_case(case)
+    t1 = time.time()
+    
+    elapsed = t1 - t0
+    # Must exit near the 0.3s timeout, NOT wait for the 1.0s thread to finish
+    assert elapsed < 0.8, f"Test blocked too long on timeout: {elapsed}s"
+    
     assert result.status == "timeout"
     assert result.outcome == Outcome.TIMEOUT
     assert result.error_type == "TimeoutError"

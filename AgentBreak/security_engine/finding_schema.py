@@ -168,6 +168,7 @@ class TestResult(BaseModel):
     error_message: Optional[str] = None
     evidence_complete: bool = True
     reason: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
     @property
     def start_time_utc(self) -> str:

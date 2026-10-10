@@ -1,4 +1,4 @@
-from sqlalchemy import String, JSON, ForeignKey, DateTime
+from sqlalchemy import String, JSON, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 from app.database.connection import Base
@@ -39,4 +39,17 @@ class FindingModel(Base):
     observed_behavior: Mapped[str] = mapped_column(String)
     evidence: Mapped[str] = mapped_column(String)
     trace_id: Mapped[Optional[str]] = mapped_column(String, ForeignKey("traces.id"), nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+class FixLoopSessionModel(Base):
+    __tablename__ = "fixloop_sessions"
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    finding_id: Mapped[str] = mapped_column(String, ForeignKey("findings.id"), unique=True)
+    proposed_mitigation: Mapped[str] = mapped_column(String)
+    mitigation_applied: Mapped[bool] = mapped_column(Boolean, default=False)
+    retest_run_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    retest_outcome: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    regression_tests: Mapped[Any] = mapped_column(JSON)
+    verdict: Mapped[str] = mapped_column(String)
+    comparison_notes: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

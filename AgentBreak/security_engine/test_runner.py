@@ -81,7 +81,7 @@ class AgentTestRunner:
     def __init__(
         self,
         adapter: TargetAgentAdapter,
-        timeout_seconds: float = 10.0,
+        timeout_seconds: float = 30.0,
         max_retries: int = 0,
         trace_analyzer: Optional[TraceAnalyzer] = None,
         policy_checker: Optional[PolicyChecker] = None,
@@ -146,15 +146,52 @@ class AgentTestRunner:
             attempts += 1
             try:
                 def _invoke() -> TargetAgentResponse:
-                    return self.adapter.execute(
+                    all_events = []
+                    retrieved_docs = []
+                    chat_history = []
+                    
+                    for turn_input in getattr(case, "multi_turn_inputs", []):
+                        ctx = dict(context) if context else {}
+                        ctx["chat_history"] = list(chat_history)
+                        resp = self.adapter.execute(
+                            user_input=turn_input,
+                            fixture_setup=case.fixture_setup,
+                            context=ctx,
+                        )
+                        all_events.extend(resp.trace_events)
+                        for doc in resp.retrieved_document_ids:
+                            if doc not in retrieved_docs:
+                                retrieved_docs.append(doc)
+                        
+                        chat_history.append({"role": "user", "content": turn_input})
+                        chat_history.append({"role": "assistant", "content": resp.response_text})
+                                
+                    final_ctx = dict(context) if context else {}
+                    final_ctx["chat_history"] = list(chat_history)
+                    final_resp = self.adapter.execute(
                         user_input=case.attack_input,
                         fixture_setup=case.fixture_setup,
-                        context=context,
+                        context=final_ctx,
                     )
+                    all_events.extend(final_resp.trace_events)
+                    for doc in final_resp.retrieved_document_ids:
+                        if doc not in retrieved_docs:
+                            retrieved_docs.append(doc)
+                            
+                    final_resp.trace_events = all_events
+                    final_resp.retrieved_document_ids = retrieved_docs
+                    return final_resp
 
-                with ThreadPoolExecutor(max_workers=1) as executor:
+                executor = ThreadPoolExecutor(max_workers=1)
+                try:
                     future = executor.submit(_invoke)
                     response = future.result(timeout=self.timeout_seconds)
+                finally:
+                    import sys
+                    if sys.version_info >= (3, 9):
+                        executor.shutdown(wait=False, cancel_futures=True)
+                    else:
+                        executor.shutdown(wait=False)
                 break  # Execution succeeded
             except FuturesTimeoutError:
                 status = "timeout"
@@ -205,7 +242,15 @@ class AgentTestRunner:
         raw_events = response.trace_events
         response_text = response.response_text
         retrieved_docs = response.retrieved_document_ids
-        evidence_complete = response.evidence_complete and (response.execution_error is None)
+        
+        has_user_input = any(e.event_type == EventType.USER_INPUT for e in raw_events)
+        evidence_complete = (
+            response.evidence_complete 
+            and (response.execution_error is None)
+            and len(raw_events) > 0
+            and has_user_input
+            and bool(response_text)
+        )
 
         # 1. Trace Analysis
         normalized_trace = self.trace_analyzer.normalize_trace(
@@ -689,7 +734,8 @@ class TimeoutMockAdapter:
         fixture_setup: Optional[FixtureSetup] = None,
         context: Optional[Dict[str, Any]] = None,
     ) -> TargetAgentResponse:
-        time.sleep(15.0)
+        # Bounded sleep to prevent test runners from hanging on abandoned threads
+        time.sleep(1.0)
         return TargetAgentResponse(response_text="Should never finish")
 
 

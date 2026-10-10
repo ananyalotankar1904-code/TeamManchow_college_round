@@ -25,7 +25,7 @@ def test_case_library_validation():
 def test_category_coverage():
     """Verify all 5 required categories have at least 5 distinct high-quality cases."""
     all_cases = get_all_cases()
-    assert len(all_cases) == 25
+    assert len(all_cases) >= 25  # 25 baseline + multi-turn cases (MT-*)
 
     categories = get_categories()
     assert len(categories) == 5

@@ -773,6 +773,32 @@ class ApiService {
   // ==========================================
 
   public async getFixLoopSession(findingId: string): Promise<FixLoopSession> {
+    if (!this.isDemoMode && this.connectionStatus.connected) {
+      try {
+        let raw;
+        try {
+          raw = await this.liveFetch<any>(`/api/v1/fixloop/${findingId}`);
+        } catch {
+          raw = await this.liveFetch<any>(`/api/v1/fixloop/${findingId}/recommendation`, { method: 'POST' });
+        }
+        const finding = await this.getFinding(findingId);
+        return {
+          findingId: raw.finding_id || raw.findingId,
+          finding: finding!,
+          step: raw.verdict === 'proposed' ? 1 : raw.verdict === 'verification_pending' ? 3 : 5,
+          proposedMitigation: raw.proposed_mitigation || raw.proposedMitigation,
+          mitigationApplied: raw.mitigation_applied ?? raw.mitigationApplied ?? false,
+          retestRunId: raw.retest_run_id || raw.retestRunId,
+          retestOutcome: raw.retest_outcome || raw.retestOutcome,
+          regressionTests: raw.regression_tests || raw.regressionTests || [],
+          verdict: raw.verdict,
+          comparisonNotes: raw.comparison_notes || raw.comparisonNotes,
+        };
+      } catch (err) {
+        throw err;
+      }
+    }
+
     if (this.demoFixLoopSessions.has(findingId)) {
       return { ...this.demoFixLoopSessions.get(findingId)! };
     }
@@ -792,16 +818,43 @@ class ApiService {
   }
 
   public async applyMitigation(findingId: string, customPatch?: string): Promise<FixLoopSession> {
+    // In our backend API, applying mitigation isn't an explicit endpoint, it's just a state. 
+    // We can simulate it here in the frontend state even for live connections until a backend route is made, 
+    // or just assume verify_fix does it. Actually, verify_fix runs the scan. 
+    // For now we just update local state.
     const session = await this.getFixLoopSession(findingId);
     session.mitigationApplied = true;
     session.appliedTimestamp = new Date().toISOString();
     if (customPatch) session.proposedMitigation = customPatch;
     session.step = 3;
-    this.demoFixLoopSessions.set(findingId, session);
+    if (this.isDemoMode) {
+      this.demoFixLoopSessions.set(findingId, session);
+    }
     return { ...session };
   }
 
   public async runFixLoopRetest(findingId: string): Promise<FixLoopSession> {
+    if (!this.isDemoMode && this.connectionStatus.connected) {
+      try {
+        const raw = await this.liveFetch<any>(`/api/v1/fixloop/${findingId}/verify`, { method: 'POST' });
+        const finding = await this.getFinding(findingId);
+        return {
+          findingId: raw.finding_id || raw.findingId,
+          finding: finding!,
+          step: 5, // Jump to step 5 as backend verification simulates full run
+          proposedMitigation: raw.proposed_mitigation || raw.proposedMitigation,
+          mitigationApplied: raw.mitigation_applied ?? raw.mitigationApplied ?? false,
+          retestRunId: raw.retest_run_id || raw.retestRunId,
+          retestOutcome: raw.retest_outcome || raw.retestOutcome,
+          regressionTests: raw.regression_tests || raw.regressionTests || [],
+          verdict: raw.verdict,
+          comparisonNotes: raw.comparison_notes || raw.comparisonNotes,
+        };
+      } catch (err) {
+        throw err;
+      }
+    }
+
     const session = await this.getFixLoopSession(findingId);
     session.retestRunId = `retest_${Date.now().toString(36)}`;
     session.retestTimestamp = new Date().toISOString();
@@ -814,6 +867,11 @@ class ApiService {
   }
 
   public async runRegressionSuite(findingId: string): Promise<FixLoopSession> {
+    // Backend verify_fix already simulates regression. We can just return getFixLoopSession or re-call verify.
+    if (!this.isDemoMode && this.connectionStatus.connected) {
+      return this.getFixLoopSession(findingId);
+    }
+
     const session = await this.getFixLoopSession(findingId);
     session.regressionTests = MOCK_REGRESSION_TESTS.map((t) => ({
       ...t,

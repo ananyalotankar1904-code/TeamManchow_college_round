@@ -27,6 +27,10 @@ else:
 class AgentConfig:
     """Centralized configuration values for Target AI Agent."""
 
+    model_provider: str = "openai"
+    system_prompt_override: str | None = None
+    groq_api_key: str | None = None
+    groq_model: str = "llama-3.3-70b-versatile"
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
     model_timeout_seconds: float = 30.0
@@ -65,19 +69,25 @@ def get_config(
     the configuration safely defaults mock_mode to True for deterministic testing.
     """
     env_mock = os.getenv("TARGET_AGENT_MOCK_MODE", "false").lower() in ("true", "1", "yes")
-    resolved_api_key = openai_api_key if openai_api_key is not None else os.getenv("OPENAI_API_KEY")
+    resolved_provider = os.getenv("MODEL_PROVIDER", "openai").lower()
+    
+    resolved_openai_key = openai_api_key if openai_api_key is not None else os.getenv("OPENAI_API_KEY")
+    resolved_groq_key = os.getenv("GROQ_API_KEY")
 
     if mock_mode is not None:
         resolved_mock = mock_mode
     elif env_mock:
         resolved_mock = True
-    elif not resolved_api_key:
-        # Default to safe mock mode when no live API key is present
-        resolved_mock = True
     else:
-        resolved_mock = False
+        if resolved_provider == "groq" and not resolved_groq_key:
+            resolved_mock = True
+        elif resolved_provider == "openai" and not resolved_openai_key:
+            resolved_mock = True
+        else:
+            resolved_mock = False
 
-    resolved_model = openai_model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    resolved_openai_model = openai_model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    resolved_groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
     try:
         env_timeout = float(os.getenv("MODEL_TIMEOUT_SECONDS", "30.0"))
@@ -94,8 +104,12 @@ def get_config(
     resolved_data_dir = sample_data_dir if sample_data_dir is not None else (_PACKAGE_DIR / "sample_data")
 
     return AgentConfig(
-        openai_api_key=resolved_api_key,
-        openai_model=resolved_model,
+        model_provider=resolved_provider,
+        system_prompt_override=None,
+        groq_api_key=resolved_groq_key,
+        groq_model=resolved_groq_model,
+        openai_api_key=resolved_openai_key,
+        openai_model=resolved_openai_model,
         model_timeout_seconds=resolved_timeout,
         max_iterations=resolved_max_iter,
         mock_mode=resolved_mock,

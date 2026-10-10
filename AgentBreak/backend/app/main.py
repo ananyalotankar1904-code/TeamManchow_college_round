@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from app.core.config import settings
-from app.api import agents, scans, findings, reports, traces
+from app.api import agents, scans, findings, reports, traces, fixloop
 from app.database.connection import engine, Base
 
 # Create tables for initial setup
@@ -36,3 +36,4 @@ app.include_router(scans.router, prefix=f"{settings.API_V1_STR}/scans", tags=["s
 app.include_router(findings.router, prefix=f"{settings.API_V1_STR}/findings", tags=["findings"])
 app.include_router(reports.router, prefix=f"{settings.API_V1_STR}/reports", tags=["reports"])
 app.include_router(traces.router, prefix=f"{settings.API_V1_STR}/traces", tags=["traces"])
+app.include_router(fixloop.router, prefix=f"{settings.API_V1_STR}/fixloop", tags=["fixloop"])

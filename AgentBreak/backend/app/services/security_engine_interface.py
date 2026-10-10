@@ -20,8 +20,9 @@ class SecurityEngine(Protocol):
 
 class BridgeTargetAdapter:
     """Adapts backend AgentAdapter to the Security Engine TargetAgentAdapter protocol."""
-    def __init__(self, backend_adapter: AgentAdapter):
+    def __init__(self, backend_adapter: AgentAdapter, base_metadata: Optional[Dict[str, Any]] = None):
         self.backend_adapter = backend_adapter
+        self.base_metadata = base_metadata or {}
 
     def execute(
         self,
@@ -30,10 +31,17 @@ class BridgeTargetAdapter:
         context: Optional[Dict[str, Any]] = None,
     ) -> TargetAgentResponse:
         
+        meta = self.base_metadata.copy()
+        if context:
+            meta["test_id"] = context.get("test_id", "default-test")
+            meta.update(context)
+        else:
+            meta["test_id"] = "default-test"
+            
         req = AgentRequest(
             session_id=context.get("run_id", str(uuid.uuid4())) if context else str(uuid.uuid4()),
             input_text=user_input,
-            metadata={"test_id": context.get("test_id", "default-test") if context else "default-test"}
+            metadata=meta
         )
         
         resp = self.backend_adapter.invoke(req)
@@ -189,25 +197,42 @@ class RealSecurityEngine:
 
 class MockSecurityEngine:
     def run_tests(self, test_cases: List[str], agent: AgentAdapter, scan_id: str) -> Tuple[List[FindingCreate], List[TraceCreate]]:
-        trace_id = str(uuid.uuid4())
-        test_id = test_cases[0] if test_cases else "default"
+        if not test_cases:
+            test_cases = ["default"]
+            
+        findings = []
+        traces = []
         
-        finding = FindingCreate(
-            scan_id=scan_id,
-            test_id=test_id,
-            category="mock_demo",
-            execution_status="completed",
-            outcome="failed",
-            expected_behavior="Expected safe output",
-            observed_behavior="Observed unsafe output",
-            evidence="[MOCK] Fabricated evidence for development",
-            trace_id=None
-        )
-        
-        trace = TraceCreate(
-            scan_id=scan_id,
-            test_id=test_id,
-            events=[{"event": "test started"}, {"event": "test completed"}]
-        )
-        
-        return [finding], [trace]
+        for test_id in test_cases:
+            trace_id = str(uuid.uuid4())
+            
+            # If it's a regression test, mock it as passed
+            if test_id.startswith("BR-"):
+                outcome = "executed"
+                execution_status = "completed"
+            else:
+                outcome = "failed"
+                execution_status = "completed"
+            
+            finding = FindingCreate(
+                scan_id=scan_id,
+                test_id=test_id,
+                category="mock_demo",
+                execution_status=execution_status,
+                outcome=outcome,
+                expected_behavior="Expected safe output",
+                observed_behavior="Observed unsafe output",
+                evidence="[MOCK] Fabricated evidence for development",
+                trace_id=None
+            )
+            
+            trace = TraceCreate(
+                scan_id=scan_id,
+                test_id=test_id,
+                events=[{"event": "test started"}, {"event": "test completed"}]
+            )
+            
+            findings.append(finding)
+            traces.append(trace)
+            
+        return findings, traces

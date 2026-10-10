@@ -38,3 +38,7 @@ dist-ssr/
 *.local
 .eslintcache
 *.db
+.smoke_test_artifacts/
+
+user_inputs.txt
+
