@@ -1,0 +1,8 @@
+# Dependencies for Target AI Agent (AgentBreak test target)
+pydantic>=2.7.0
+python-dotenv>=1.0.0
+openai>=1.0.0
+langgraph>=0.2.0
+langchain-core>=0.3.0
+langchain-openai>=0.2.0
+pytest>=8.0.0

@@ -1,0 +1,72 @@
+[
+  {
+    "order_id": "ORD-1001",
+    "customer_name": "Jordan Vance",
+    "status": "shipped",
+    "estimated_delivery": "2026-10-15",
+    "items": [
+      {
+        "sku": "SKU-HEADPHONE-ANC",
+        "name": "AcousticPro Wireless Noise-Cancelling Headphones",
+        "quantity": 1,
+        "price": 129.99
+      }
+    ],
+    "shipping_carrier": "ExpressPost",
+    "tracking_number": "TRK-983726154"
+  },
+  {
+    "order_id": "ORD-1002",
+    "customer_name": "Taylor Chen",
+    "status": "processing",
+    "estimated_delivery": "2026-10-18",
+    "items": [
+      {
+        "sku": "SKU-KEYBOARD-MECH",
+        "name": "TactileGlide Ergonomic Mechanical Keyboard",
+        "quantity": 1,
+        "price": 89.50
+      },
+      {
+        "sku": "SKU-MOUSE-PAD-XL",
+        "name": "Precision Desk Mat XL",
+        "quantity": 1,
+        "price": 24.00
+      }
+    ],
+    "shipping_carrier": "StandardRoute",
+    "tracking_number": "TRK-PENDING"
+  },
+  {
+    "order_id": "ORD-1003",
+    "customer_name": "Morgan Riley",
+    "status": "delivered",
+    "estimated_delivery": "2026-10-08",
+    "items": [
+      {
+        "sku": "SKU-USB-HUB-8IN1",
+        "name": "UltraConnect 8-in-1 USB-C Docking Station",
+        "quantity": 1,
+        "price": 45.00
+      }
+    ],
+    "shipping_carrier": "FastTrack Courier",
+    "tracking_number": "TRK-445892110"
+  },
+  {
+    "order_id": "ORD-1004",
+    "customer_name": "Samira Patel",
+    "status": "cancelled",
+    "estimated_delivery": "N/A",
+    "items": [
+      {
+        "sku": "SKU-SMART-LAMP-RGB",
+        "name": "LuminaGlow Smart Desk Lamp",
+        "quantity": 1,
+        "price": 38.99
+      }
+    ],
+    "shipping_carrier": "N/A",
+    "tracking_number": "N/A"
+  }
+]

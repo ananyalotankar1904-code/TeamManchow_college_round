@@ -1,0 +1,98 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        cyber: {
+          bg: '#002B36',
+          sidebar: '#01212A',
+          topbar: '#01303C',
+          panel: '#073642',
+          panelAlt: '#0A3F4D',
+          card: '#073642',
+          inset: '#002B36',
+          tile: '#002B36',
+          border: '#124A58',
+          borderLight: '#185B6C',
+          borderDark: '#0A3844',
+          primary: '#E3EEEE',
+          secondary: '#8CA3A8',
+          muted: '#5F7C82',
+          mono: '#BCD0D3',
+          accent: '#2B7F8C',
+          accentHover: '#3596A5',
+          accentText: '#F2FAFA',
+          link: '#6DBAC6',
+          highlight: '#6DBAC6',
+          navActive: '#0E4452',
+          navActiveText: '#BFE3E8',
+          warningBanner: '#332E1E',
+          warningText: '#E2C98F',
+          warningBorder: '#4A4228',
+          statCritical: '#2E2C32',
+          statCriticalBorder: '#5A3A3C',
+          statCriticalLabel: '#E3A39A',
+        },
+        severity: {
+          critical: {
+            fill: '#D9776B',
+            num: '#E08A7E',
+            badgeBg: '#4A2F31',
+            badgeText: '#F0B3AA',
+            badgeBorder: '#5A3A3C',
+          },
+          high: {
+            fill: '#D39A5B',
+            num: '#D9A468',
+            badgeBg: '#4A3A25',
+            badgeText: '#EBC48E',
+            badgeBorder: '#59462D',
+          },
+          medium: {
+            fill: '#C8AE5A',
+            num: '#CDB866',
+            badgeBg: '#3D3620',
+            badgeText: '#E2C98F',
+            badgeBorder: '#544A2C',
+          },
+          low: {
+            fill: '#8CA3A8',
+            num: '#8CA3A8',
+            badgeBg: '#0E3D48',
+            badgeText: '#A5C7CF',
+            badgeBorder: '#185260',
+          },
+          info: {
+            fill: '#8CA3A8',
+            num: '#8CA3A8',
+            badgeBg: '#0E3D48',
+            badgeText: '#A5C7CF',
+            badgeBorder: '#185260',
+          },
+          success: {
+            fill: '#78B993',
+            num: '#78B993',
+            badgeBg: '#1D3D33',
+            badgeText: '#A6D6B7',
+            badgeBorder: '#285547',
+          },
+        }
+      },
+      fontFamily: {
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['"JetBrains Mono"', '"Fira Code"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+      },
+      boxShadow: {
+        'panel': '0 4px 16px -2px rgba(0, 43, 54, 0.4)',
+        'elevated': '0 8px 24px -4px rgba(0, 43, 54, 0.5)',
+        'subtle': '0 1px 2px 0 rgba(0, 43, 54, 0.3)',
+      },
+    },
+  },
+  plugins: [],
+}

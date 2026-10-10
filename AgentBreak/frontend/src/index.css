@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-page: #002B36;
+    --bg-sidebar: #01212A;
+    --bg-topbar: #01303C;
+    --bg-panel: #073642;
+    --bg-inset: #002B36;
+    --border-divider: #124A58;
+    --text-primary: #E3EEEE;
+    --text-secondary: #8CA3A8;
+    --text-muted: #5F7C82;
+    --text-mono: #BCD0D3;
+    --accent-teal: #2B7F8C;
+    --accent-hover: #3596A5;
+    --accent-text: #F2FAFA;
+    --accent-link: #6DBAC6;
+  }
+
+  body {
+    background-color: #002B36;
+    color: #E3EEEE;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background-color: #0E4452;
+    color: #BFE3E8;
+  }
+
+  /* Custom subtle scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #002B36;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #124A58;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2B7F8C;
+  }
+}
+
+@layer utilities {
+  .font-mono-tech {
+    font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+}
+
+/* Custom Deep Teal cybersecurity styles */
+.cyber-panel {
+  background-color: #073642;
+  border: 1px solid #124A58;
+  border-radius: 6px;
+}
+
+.cyber-panel-elevated {
+  background-color: #0A3F4D;
+  border: 1px solid #185B6C;
+  border-radius: 6px;
+}
+
+.cyber-input {
+  background-color: #002B36;
+  border: 1px solid #124A58;
+  color: #E3EEEE;
+  border-radius: 4px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cyber-input:focus {
+  outline: none;
+  border-color: #2B7F8C;
+  box-shadow: 0 0 0 1px rgba(43, 127, 140, 0.4);
+}
+
+.cyber-button-primary {
+  background-color: #2B7F8C;
+  color: #F2FAFA;
+  border: 1px solid #3596A5;
+  border-radius: 4px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.cyber-button-primary:hover:not(:disabled) {
+  background-color: #3596A5;
+  border-color: #48ADC0;
+}
+
+.cyber-button-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cyber-button-secondary {
+  background-color: #0E4452;
+  color: #BFE3E8;
+  border: 1px solid #124A58;
+  border-radius: 4px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.cyber-button-secondary:hover:not(:disabled) {
+  background-color: #155A6B;
+  border-color: #1E6B7E;
+  color: #E3EEEE;
+}
+
+.cyber-button-danger {
+  background-color: #4A2F31;
+  color: #F0B3AA;
+  border: 1px solid #5A3A3C;
+  border-radius: 4px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.cyber-button-danger:hover:not(:disabled) {
+  background-color: #5E3A3C;
+  border-color: #7A4B4E;
+}
+
+/* Violation Timeline Node */
+.timeline-violation-node {
+  border-color: #5A3A3C !important;
+  background-color: #4A2F31 !important;
+}
+
+.timeline-blocked-node {
+  border-color: #285547 !important;
+  background-color: #1D3D33 !important;
+}
