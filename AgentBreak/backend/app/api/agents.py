@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from typing import List
 from sqlalchemy.orm import Session
 from app.schemas.agent import Agent, AgentCreate
 from app.database.connection import get_db
@@ -6,6 +7,10 @@ from app.database.models import AgentModel
 import uuid
 
 router = APIRouter()
+
+@router.get("/", response_model=List[Agent])
+def list_agents(db: Session = Depends(get_db)):
+    return db.query(AgentModel).all()
 
 @router.post("/", response_model=Agent)
 def register_agent(agent: AgentCreate, db: Session = Depends(get_db)):

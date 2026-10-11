@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { SecurityScan, FilterState, Agent, AttackCategory } from '../types';
+import { SecurityScan, FilterState, Agent, AttackCategory, SecurityFinding } from '../types';
 import { PageHeader } from '../components/layout/PageHeader';
 import { ScanResultsTable } from '../components/scans/ScanResultsTable';
 import { ScanConfigurationForm } from '../components/scans/ScanConfigurationForm';
@@ -19,6 +19,7 @@ import {
 
 interface ScanResultsPageProps {
   scans: SecurityScan[];
+  findings?: SecurityFinding[];
   activeScanId?: string;
   agents: Agent[];
   onSelectScan: (scanId: string) => void;
@@ -33,6 +34,7 @@ interface ScanResultsPageProps {
 
 export const ScanResultsPage: React.FC<ScanResultsPageProps> = ({
   scans,
+  findings,
   activeScanId,
   agents,
   onSelectScan,
@@ -59,7 +61,16 @@ export const ScanResultsPage: React.FC<ScanResultsPageProps> = ({
     searchQuery: '',
   });
 
-  const scanFindings = currentScan ? currentScan.findings || [] : [];
+  const scanFindings = useMemo(() => {
+    if (!currentScan) return [];
+    if (currentScan.findings && currentScan.findings.length > 0) {
+      return currentScan.findings;
+    }
+    if (findings && findings.length > 0) {
+      return findings.filter((f) => f.scanId === currentScan.id);
+    }
+    return [];
+  }, [currentScan, findings]);
 
   const filteredFindings = useMemo(() => {
     return scanFindings.filter((f) => {

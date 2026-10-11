@@ -6,7 +6,7 @@ class FindingBase(BaseModel):
     test_id: str
     category: str
     execution_status: str
-    outcome: Literal["attempted", "blocked", "executed", "failed", "inconclusive"]
+    outcome: str
     expected_behavior: str
     observed_behavior: str
     evidence: str

@@ -49,16 +49,23 @@ const AgentBreakApp: React.FC = () => {
         api.getFindings(),
       ]);
 
+      const scansWithFindings = fetchedScans.map((s) => ({
+        ...s,
+        findings: s.findings && s.findings.length > 0 ? s.findings : fetchedFindings.filter((f) => f.scanId === s.id),
+      }));
+
       setAgents(fetchedAgents);
-      setScans(fetchedScans);
+      setScans(scansWithFindings);
       setFindings(fetchedFindings);
 
       if (fetchedFindings.length > 0) {
+        setSelectedFindingId((prev) => (prev === 'FND-2026-0891' && !api.getStatus().isDemoMode ? fetchedFindings[0].id : prev));
         const session = await api.getFixLoopSession(fetchedFindings[0].id);
         setFixLoopSession(session);
       }
 
       if (fetchedScans.length > 0) {
+        setSelectedScanId((prev) => (prev === 'scan_94f81a7b' && !api.getStatus().isDemoMode ? fetchedScans[0].id : prev));
         const rep = await api.getReport(fetchedScans[0].id);
         setReport(rep);
       }
@@ -151,6 +158,12 @@ const AgentBreakApp: React.FC = () => {
           .then(async (completedScan) => {
             const freshFindings = await api.getFindings(completedScan.id);
             setFindings((prev) => [...freshFindings, ...prev.filter((f) => f.scanId !== completedScan.id)]);
+            setScans((prev) =>
+              prev.map((s) => (s.id === completedScan.id ? { ...s, findings: freshFindings } : s))
+            );
+            if (freshFindings.length > 0) {
+              setSelectedFindingId(freshFindings[0].id);
+            }
             showSuccess(`Security scan ${completedScan.id.substring(0, 10)} finished (${freshFindings.length} findings)`);
           })
           .catch((pollErr) => {
@@ -268,6 +281,7 @@ const AgentBreakApp: React.FC = () => {
       {activeTab === 'scans' && (
         <ScanResultsPage
           scans={scans}
+          findings={findings}
           activeScanId={selectedScanId}
           agents={agents}
           onSelectScan={handleSelectScan}

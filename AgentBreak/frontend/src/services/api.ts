@@ -155,7 +155,30 @@ export interface RawBackendFinding {
     observedBehavior?: string;
     result?: string;
   };
-  evidence?: {
+  impact?: string;
+  remediation?: {
+    summary?: string;
+    patch_type?: string;
+    patchType?: string;
+    proposed_patch?: string;
+    proposedPatch?: string;
+    applied_patch?: string;
+    appliedPatch?: string;
+    code_diff?: string;
+    codeDiff?: string;
+    reference_links?: string[];
+    referenceLinks?: string[];
+  };
+  created_at?: string;
+  createdAt?: string;
+  // Flat fields emitted by live security_engine (no nested sub-objects)
+  test_id?: string;
+  expected_behavior?: string;
+  observed_behavior?: string;
+  remediation_suggestion?: string;
+  trace_id?: string;
+  // String-serialised evidence blob from live DB rows
+  evidence?: string | {
     trace_id?: string;
     traceId?: string;
     trace_events?: RawBackendTraceEvent[];
@@ -178,23 +201,8 @@ export interface RawBackendFinding {
     policyDecisions?: string[];
     evidence_notes?: string;
     evidenceNotes?: string;
+    model_response?: string;
   };
-  impact?: string;
-  remediation?: {
-    summary?: string;
-    patch_type?: string;
-    patchType?: string;
-    proposed_patch?: string;
-    proposedPatch?: string;
-    applied_patch?: string;
-    appliedPatch?: string;
-    code_diff?: string;
-    codeDiff?: string;
-    reference_links?: string[];
-    referenceLinks?: string[];
-  };
-  created_at?: string;
-  createdAt?: string;
 }
 
 export interface RawBackendTraceEvent {
@@ -279,15 +287,41 @@ export function normalizeScan(raw: RawBackendScan): SecurityScan {
 /**
  * Normalizes a raw finding object from backend schemas to the frontend SecurityFinding interface.
  */
+/** Maps security engine test_id codes to human-readable attack category names. */
+const TEST_ID_TITLE_MAP: Record<string, string> = {
+  'DI-001': 'Direct Prompt Injection',
+  'DI-002': 'Indirect Prompt Injection',
+  'DI-003': 'System Prompt Exfiltration',
+  'TI-001': 'Unauthorized Tool Invocation',
+  'TI-002': 'Tool Parameter Tampering',
+  'TI-003': 'Permission Boundary Escape',
+  'MI-001': 'Memory Poisoning',
+  'MI-002': 'Context Window Manipulation',
+  'MS-001': 'Multi-Stage Attack Chain',
+  'MS-002': 'Privilege Escalation Chain',
+  'RA-001': 'RAG Data Exfiltration',
+  'RA-002': 'RAG Poisoning',
+};
+
 export function normalizeFinding(raw: RawBackendFinding): SecurityFinding {
   const reproduction = raw.reproduction || {};
-  const evidence = raw.evidence || {};
   const remediation = raw.remediation || {};
+
+  let parsedEvidence: Record<string, any> = {};
+  if (typeof raw.evidence === 'object' && raw.evidence !== null) {
+    parsedEvidence = raw.evidence as Record<string, any>;
+  } else if (typeof raw.evidence === 'string') {
+    try {
+      parsedEvidence = JSON.parse(raw.evidence);
+    } catch {
+      parsedEvidence = { rawPayload: raw.evidence, evidenceNotes: raw.evidence };
+    }
+  }
 
   // Preserve execution outcome and security verdicts cleanly
   const rawOutcome = (raw.outcome || raw.attack_outcome || raw.execution_outcome || 'attempted').toLowerCase();
   let normalizedOutcome: AttackOutcome = 'attempted';
-  if (rawOutcome === 'confirmed_vulnerable' || rawOutcome === 'vulnerable') normalizedOutcome = 'confirmed_vulnerable';
+  if (rawOutcome === 'confirmed_vulnerable' || rawOutcome === 'vulnerability_confirmed' || rawOutcome === 'vulnerable') normalizedOutcome = 'confirmed_vulnerable';
   else if (rawOutcome === 'blocked' || rawOutcome === 'prevented') normalizedOutcome = 'blocked';
   else if (rawOutcome === 'executed' || rawOutcome === 'successful') normalizedOutcome = 'executed';
   else if (rawOutcome === 'inconclusive' || rawOutcome === 'unknown') normalizedOutcome = 'inconclusive';
@@ -295,50 +329,93 @@ export function normalizeFinding(raw: RawBackendFinding): SecurityFinding {
   const rawVerdict = (raw.fix_loop_verdict || raw.security_verdict || raw.fixLoopVerdict || '').toLowerCase();
   let normalizedVerdict: FixLoopVerdict = 'not_yet_tested';
   if (rawVerdict === 'mitigation_verified' || rawVerdict === 'verified_fixed') normalizedVerdict = 'mitigation_verified';
-  else if (rawVerdict === 'still_vulnerable' || rawVerdict === 'confirmed_vulnerable' || rawVerdict === 'vulnerable') normalizedVerdict = 'still_vulnerable';
+  else if (rawVerdict === 'still_vulnerable' || rawVerdict === 'confirmed_vulnerable' || rawVerdict === 'vulnerability_confirmed' || rawVerdict === 'vulnerable') normalizedVerdict = 'still_vulnerable';
   else if (rawVerdict === 'regression_failure') normalizedVerdict = 'regression_failure';
   else if (rawVerdict === 'inconclusive') normalizedVerdict = 'inconclusive';
+
+  // Resolve title: prefer explicit title, then test_id lookup, then category-based fallback
+  const testId = raw.test_id;
+  const title =
+    raw.title ||
+    raw.name ||
+    (testId
+      ? `${testId}: ${TEST_ID_TITLE_MAP[testId] || (raw.category || 'Security Finding').replace(/_/g, ' ')}`
+      : 'Security Finding');
+
+  // Infer severity: confirmed vulnerabilities are at least critical when no explicit severity set
+  let severity = (raw.severity?.toLowerCase() as Severity) || 'medium';
+  if (!raw.severity) {
+    if (normalizedOutcome === 'confirmed_vulnerable') {
+      severity = 'critical';
+    } else if (normalizedOutcome === 'executed') {
+      severity = 'high';
+    }
+  }
+
+  const expectedBehavior =
+    reproduction.expected_behavior ||
+    reproduction.expectedBehavior ||
+    raw.expected_behavior ||
+    '';
+  const observedBehavior =
+    reproduction.observed_behavior ||
+    reproduction.observedBehavior ||
+    raw.observed_behavior ||
+    '';
+
+  const description =
+    raw.description ||
+    observedBehavior ||
+    expectedBehavior ||
+    'Observed security evaluation behavior against target agent.';
+
+  const technicalAnalysis =
+    raw.technical_analysis ||
+    raw.technicalAnalysis ||
+    (typeof raw.evidence === 'string'
+      ? raw.evidence
+      : 'Deterministic attack vector execution record.');
 
   return {
     id: raw.finding_id || raw.id || `FND-${Date.now().toString(36)}`,
     scanId: raw.scan_id || raw.scanId || '',
     agentId: raw.agent_id || raw.agentId || '',
     agentName: raw.agent_name || raw.agentName || 'Target Agent',
-    title: raw.title || raw.name || 'Security Finding',
-    severity: (raw.severity?.toLowerCase() as Severity) || 'medium',
+    title,
+    severity,
     confidence: (raw.confidence as SecurityFinding['confidence']) || 'CONFIRMED',
     category: (raw.category || raw.attack_category || 'direct_prompt_injection') as AttackCategory,
     outcome: normalizedOutcome,
     status: (raw.status as SecurityFinding['status']) || 'open',
-    description: raw.description || '',
-    technicalAnalysis: raw.technical_analysis || raw.technicalAnalysis || '',
+    description,
+    technicalAnalysis,
     affectedTool: raw.affected_tool || raw.affectedTool,
     affectedResource: raw.affected_resource || raw.affectedResource,
     reproduction: {
-      testInput: reproduction.test_input || reproduction.testInput || '',
+      testInput: reproduction.test_input || reproduction.testInput || (raw as any).test_id || '',
       vectorPayload: reproduction.vector_payload || reproduction.vectorPayload || '',
-      expectedBehavior: reproduction.expected_behavior || reproduction.expectedBehavior || '',
-      observedBehavior: reproduction.observed_behavior || reproduction.observedBehavior || '',
-      result: reproduction.result || '',
+      expectedBehavior,
+      observedBehavior,
+      result: reproduction.result || `Outcome: ${normalizedOutcome}`,
     },
     evidence: {
-      traceId: evidence.trace_id || evidence.traceId || '',
-      traceEvents: Array.isArray(evidence.trace_events || evidence.traceEvents)
-        ? (evidence.trace_events || evidence.traceEvents)!.map(normalizeTraceEvent)
+      traceId: parsedEvidence.trace_id || parsedEvidence.traceId || (raw as any).trace_id || '',
+      traceEvents: Array.isArray(parsedEvidence.trace_events || parsedEvidence.traceEvents)
+        ? (parsedEvidence.trace_events || parsedEvidence.traceEvents)!.map(normalizeTraceEvent)
         : [],
-      toolCalls: (evidence.tool_calls || evidence.toolCalls || []).map((tc) => ({
+      toolCalls: (parsedEvidence.tool_calls || parsedEvidence.toolCalls || []).map((tc: any) => ({
         name: tc.name || '',
         arguments: tc.arguments || {},
         response: tc.response,
         timestamp: tc.timestamp || new Date().toISOString(),
       })),
-      rawPayload: evidence.raw_payload || evidence.rawPayload || '',
-      policyDecisions: evidence.policy_decisions || evidence.policyDecisions || [],
-      evidenceNotes: evidence.evidence_notes || evidence.evidenceNotes,
+      rawPayload: parsedEvidence.raw_payload || parsedEvidence.rawPayload || (typeof raw.evidence === 'string' ? raw.evidence : ''),
+      policyDecisions: parsedEvidence.policy_decisions || parsedEvidence.policyDecisions || [],
+      evidenceNotes: parsedEvidence.evidence_notes || parsedEvidence.evidenceNotes,
     },
     impact: raw.impact || '',
     remediation: {
-      summary: remediation.summary || 'Apply defensive guardrail to agent prompt and tool parameter boundaries.',
+      summary: remediation.summary || raw.remediation_suggestion || 'Apply defensive guardrail to agent prompt and tool parameter boundaries.',
       patchType: (remediation.patch_type || remediation.patchType || 'system_prompt') as RemediationSuggestion['patchType'],
       proposedPatch: remediation.proposed_patch || remediation.proposedPatch || '',
       appliedPatch: remediation.applied_patch || remediation.appliedPatch,
@@ -347,7 +424,9 @@ export function normalizeFinding(raw: RawBackendFinding): SecurityFinding {
     },
     fixLoopVerdict: normalizedVerdict,
     createdAt: raw.created_at || raw.createdAt || new Date().toISOString(),
-  };
+    // Carry live trace_id so detail page can offer trace link
+    ...(raw.trace_id ? { traceId: raw.trace_id } : {}),
+  } as SecurityFinding;
 }
 
 /**
@@ -740,10 +819,27 @@ class ApiService {
 
   public async getFinding(findingId: string): Promise<SecurityFinding | undefined> {
     if (!this.isDemoMode && this.connectionStatus.connected) {
+      try {
+        const raw = await this.liveFetch<RawBackendFinding | RawBackendFinding[]>(`/api/v1/findings/detail/${findingId}`);
+        if (raw && !Array.isArray(raw) && (raw.id || raw.finding_id)) {
+          return normalizeFinding(raw);
+        }
+      } catch {
+        try {
+          const raw = await this.liveFetch<RawBackendFinding | RawBackendFinding[]>(`/api/v1/findings/${findingId}`);
+          if (Array.isArray(raw)) {
+            if (raw.length > 0) return normalizeFinding(raw[0]);
+          } else if (raw && (raw.id || raw.finding_id)) {
+            return normalizeFinding(raw);
+          }
+        } catch {
+          // Fallback to getFindings
+        }
+      }
       const findings = await this.getFindings();
-      return findings.find((f) => f.id === findingId);
+      return findings.find((f) => f.id === findingId || (f as any).testId === findingId || (f as any).test_id === findingId);
     }
-    return this.demoFindings.find((f) => f.id === findingId);
+    return this.demoFindings.find((f) => f.id === findingId || (f as any).testId === findingId || (f as any).test_id === findingId);
   }
 
   // ==========================================
@@ -752,18 +848,17 @@ class ApiService {
 
   /**
    * GET /api/v1/traces/{trace_id}
+   * In live mode: fetches real trace events from backend. Returns empty array (not mock) if not found.
+   * In demo mode: returns mock events so demo flow is unaffected.
    */
   public async getTraceEvents(traceId: string): Promise<TraceEvent[]> {
     if (!this.isDemoMode && this.connectionStatus.connected) {
-      try {
-        const raw = await this.liveFetch<RawBackendTraceEvent[] | { events?: RawBackendTraceEvent[]; trace_events?: RawBackendTraceEvent[] }>(`/api/v1/traces/${traceId}`);
-        const items = Array.isArray(raw)
-          ? raw
-          : (raw.events || raw.trace_events || []);
-        return items.map(normalizeTraceEvent);
-      } catch (err) {
-        throw err;
-      }
+      // Live mode: call real backend; throw so caller can show 'unavailable' state
+      const raw = await this.liveFetch<{ id?: string; events?: unknown[]; trace_events?: unknown[] } | unknown[]>(`/api/v1/traces/${traceId}`);
+      const items: unknown[] = Array.isArray(raw)
+        ? raw
+        : ((raw as any).events || (raw as any).trace_events || []);
+      return items.map((item) => normalizeTraceEvent(item as RawBackendTraceEvent));
     }
     return [...MOCK_TRACE_EVENTS_RAG];
   }
@@ -894,28 +989,133 @@ class ApiService {
   }
 
   // ==========================================
-  // 6. Security Reports API (Placeholder on Backend)
+  // 6. Security Reports API
   // ==========================================
 
   public async getReport(scanId: string): Promise<AssessmentReport> {
     if (!this.isDemoMode && this.connectionStatus.connected) {
       try {
-        const raw = await this.liveFetch<AssessmentReport>(`/api/v1/reports/${scanId}/export?format=json`);
-        return raw;
-      } catch {
-        // Backend report endpoint is reported as placeholder, fallback to dynamically generating report from active findings
+        const raw = await this.liveFetch<any>(`/api/v1/reports/${scanId}/export?format=json`);
+        // Backend returns ScanReport schema — normalize to AssessmentReport
+        return this._normalizeScanReport(raw, scanId);
+      } catch (err) {
+        // Backend report 404 or 500: fall back to assembled report from live findings
+        console.warn(`[AgentBreak] Report endpoint failed for ${scanId}, assembling from findings:`, err);
       }
     }
 
+    // Demo mode OR live fallback: assemble from actual findings (not MOCK_REPORT_DATA for live)
     const scan = await this.getScan(scanId);
     const agent = scan ? await this.getAgent(scan.agentId) : this.demoAgents[0];
     const findings = await this.getFindings(scanId);
+    const isLive = !this.isDemoMode && this.connectionStatus.connected;
 
     return {
-      ...MOCK_REPORT_DATA,
-      scanId: scanId || 'scan_94f81a7b',
-      agent: agent || this.demoAgents[0],
-      findings: findings.length > 0 ? findings : this.demoFindings,
+      // Only spread MOCK_REPORT_DATA in demo mode; in live mode use real values
+      ...(isLive ? {} : MOCK_REPORT_DATA),
+      id: `report_${scanId}`,
+      generatedAt: new Date().toISOString(),
+      scanId,
+      agent: agent || (isLive ? { id: scan?.agentId || '', name: 'Registered Agent', identifier: 'live-agent', framework: 'Custom Adapter', executionMethod: 'http_endpoint', baseUrl: '', description: '', tools: [], permissions: [], environment: 'local_lab', createdAt: new Date().toISOString(), status: 'active', scansCount: 1, criticalCount: 0 } : this.demoAgents[0]),
+      assessmentScope: scan?.categoriesTested || (isLive ? ['direct_prompt_injection'] : MOCK_REPORT_DATA.assessmentScope),
+      executiveSummary: isLive
+        ? `Live security assessment of agent ${scan?.agentName || scanId}. ${findings.length} finding(s) recorded. This report was assembled from live scan data.`
+        : MOCK_REPORT_DATA.executiveSummary,
+      severitySummary: {
+        critical: findings.filter((f) => f.severity === 'critical').length,
+        high: findings.filter((f) => f.severity === 'high').length,
+        medium: findings.filter((f) => f.severity === 'medium').length,
+        low: findings.filter((f) => f.severity === 'low').length,
+        info: findings.filter((f) => f.severity === 'info').length,
+      },
+      totalVulnerabilities: findings.filter((f) => f.outcome === 'confirmed_vulnerable' || f.outcome === 'executed').length,
+      totalBlocked: findings.filter((f) => f.outcome === 'blocked').length,
+      fixLoopVerifiedCount: findings.filter((f) => f.fixLoopVerdict === 'mitigation_verified').length,
+      findings: findings.length > 0 ? findings : (isLive ? [] : this.demoFindings),
+      methodology: isLive
+        ? 'Automated adversarial evaluation using AgentBreak security engine. Attack vectors were injected against the live target agent and responses were evaluated against expected safety boundaries.'
+        : MOCK_REPORT_DATA.methodology,
+      limitations: isLive
+        ? ['Severity is inferred from outcome; DB does not store explicit severity field.', 'Trace events may be sparse depending on agent adapter verbosity.', 'FixLoop verification requires agent endpoint to be reachable at time of retest.']
+        : MOCK_REPORT_DATA.limitations,
+    };
+  }
+
+  /** Converts backend ScanReport JSON schema to frontend AssessmentReport shape. */
+  private _normalizeScanReport(raw: any, scanId: string): AssessmentReport {
+    const meta = raw.metadata || {};
+    const findings: SecurityFinding[] = (raw.findings || []).map((f: any) => {
+      const outcome = f.outcome || 'attempted';
+      const normalizedOutcome: AttackOutcome =
+        outcome === 'vulnerability_confirmed' || outcome === 'confirmed_vulnerable' || outcome === 'vulnerable' ? 'confirmed_vulnerable'
+        : outcome === 'blocked' || outcome === 'prevented' ? 'blocked'
+        : outcome === 'executed' || outcome === 'successful' ? 'executed'
+        : outcome === 'failed' ? 'attempted'
+        : 'inconclusive';
+      return {
+        id: f.finding_id || f.id || '',
+        scanId: meta.scan_id || scanId,
+        agentId: meta.agent_id || '',
+        agentName: 'Target Agent',
+        title: f.test_id ? `${f.test_id}: ${TEST_ID_TITLE_MAP[f.test_id] || (f.category || 'Security Finding').replace(/_/g, ' ')}` : 'Security Finding',
+        severity: (f.severity === 'unknown' || !f.severity) ? (normalizedOutcome === 'confirmed_vulnerable' ? 'critical' : 'medium') : f.severity,
+        confidence: 'CONFIRMED',
+        category: (f.category || 'direct_prompt_injection') as AttackCategory,
+        outcome: normalizedOutcome,
+        status: 'open',
+        description: f.observed_behavior || '',
+        technicalAnalysis: f.evidence || '',
+        reproduction: { testInput: f.test_id || '', vectorPayload: '', expectedBehavior: f.expected_behavior || '', observedBehavior: f.observed_behavior || '', result: `Outcome: ${normalizedOutcome}` },
+        evidence: { traceId: f.trace_id || '', traceEvents: [], toolCalls: [], rawPayload: f.evidence || '', policyDecisions: [] },
+        impact: '',
+        remediation: { summary: 'Apply security guardrails.', patchType: 'system_prompt', proposedPatch: '' },
+        fixLoopVerdict: 'not_yet_tested',
+        createdAt: new Date().toISOString(),
+      } as SecurityFinding;
+    });
+
+    const confirmedCount = findings.filter((f) => f.outcome === 'confirmed_vulnerable' || f.outcome === 'executed').length;
+    const blockedCount = findings.filter((f) => f.outcome === 'blocked').length;
+
+    return {
+      id: `report_${scanId}`,
+      generatedAt: raw.generated_at || new Date().toISOString(),
+      scanId: meta.scan_id || scanId,
+      agent: {
+        id: meta.agent_id || '',
+        name: 'Target Agent',
+        identifier: 'live-target',
+        framework: 'Custom Adapter',
+        executionMethod: 'http_endpoint',
+        baseUrl: '',
+        description: raw.provenance?.source_description || '',
+        tools: [],
+        permissions: [],
+        environment: (meta.target_environment as any) || 'local_lab',
+        createdAt: meta.started_at || new Date().toISOString(),
+        status: 'active',
+        scansCount: 1,
+        criticalCount: findings.filter((f) => f.severity === 'critical').length,
+      },
+      assessmentScope: ['direct_prompt_injection'],
+      executiveSummary: `${raw.summary_notes || 'AgentBreak security assessment completed.'} Total findings: ${findings.length}. Confirmed vulnerabilities: ${confirmedCount}. Attacks blocked: ${blockedCount}. Data provenance: ${raw.provenance?.provenance_type || 'live'}.`,
+      severitySummary: {
+        critical: findings.filter((f) => f.severity === 'critical').length,
+        high: findings.filter((f) => f.severity === 'high').length,
+        medium: findings.filter((f) => f.severity === 'medium').length,
+        low: findings.filter((f) => f.severity === 'low').length,
+        info: 0,
+      },
+      totalVulnerabilities: confirmedCount,
+      totalBlocked: blockedCount,
+      fixLoopVerifiedCount: 0,
+      findings,
+      methodology: 'Automated adversarial evaluation using AgentBreak security engine against a live target agent.',
+      limitations: [
+        raw.provenance?.provenance_type === 'mock_demo' ? 'WARNING: This report was generated with a mock agent or mock security engine — data is not from a real target.' : 'Severity inferred from outcome; DB does not store explicit severity.',
+        'Trace events may be sparse depending on agent adapter verbosity.',
+        'FixLoop verification requires the registered agent endpoint to be reachable.',
+      ],
     };
   }
 }

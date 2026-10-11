@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from typing import List
 from sqlalchemy.orm import Session
 from app.schemas.scan import Scan, ScanCreate
 from app.services.scan_orchestrator import ScanOrchestrator
@@ -8,6 +9,10 @@ from app.database.models import AgentModel, ScanModel
 import uuid
 
 router = APIRouter()
+
+@router.get("/", response_model=List[Scan])
+def list_scans(db: Session = Depends(get_db)):
+    return db.query(ScanModel).all()
 
 @router.post("/", response_model=Scan)
 def create_scan(

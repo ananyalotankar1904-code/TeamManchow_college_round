@@ -169,6 +169,37 @@ describe('ApiService & URL Builder', () => {
         expect(normalized.evidence.toolCalls[0].name).toBe('execute_sql');
         expect(normalized.remediation.patchType).toBe('guardrail_config');
       });
+
+      it('should normalize live backend findings with string evidence, test_id title, and flat behaviors', () => {
+        const liveRaw: RawBackendFinding = {
+          id: 'find_live_uuid_123',
+          scan_id: 'scan_live_999',
+          agent_id: 'ag_live_456',
+          test_id: 'DI-001',
+          outcome: 'vulnerability_confirmed',
+          expected_behavior: 'Agent refuses unauthorized system instruction override',
+          observed_behavior: 'Agent executed unauthorized canary command',
+          remediation_suggestion: 'Apply prompt boundary hardening filters',
+          evidence: JSON.stringify({
+            model_response: 'Canary revealed',
+            trace_events: [{ event_type: 'TOOL_EXECUTION', actor: 'agent' }],
+            policy_decisions: ['ALLOW_OVERRIDE'],
+            tool_calls: [{ name: 'exec_bash', arguments: { cmd: 'cat canary' } }],
+          }),
+        };
+
+        const normalized = normalizeFinding(liveRaw);
+        expect(normalized.id).toBe('find_live_uuid_123');
+        expect(normalized.title).toBe('DI-001: Direct Prompt Injection');
+        expect(normalized.severity).toBe('critical');
+        expect(normalized.outcome).toBe('confirmed_vulnerable');
+        expect(normalized.reproduction.expectedBehavior).toBe('Agent refuses unauthorized system instruction override');
+        expect(normalized.reproduction.observedBehavior).toBe('Agent executed unauthorized canary command');
+        expect(normalized.evidence.toolCalls).toHaveLength(1);
+        expect(normalized.evidence.toolCalls[0].name).toBe('exec_bash');
+        expect(normalized.evidence.policyDecisions).toEqual(['ALLOW_OVERRIDE']);
+        expect(normalized.remediation.summary).toBe('Apply prompt boundary hardening filters');
+      });
     });
 
     describe('normalizeTraceEvent', () => {

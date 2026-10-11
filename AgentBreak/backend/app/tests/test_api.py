@@ -18,22 +18,23 @@ def override_get_db():
     finally:
         db.close()
 
-app.dependency_overrides[get_db] = override_get_db
-
 from app.api.deps import get_agent_adapter, get_security_engine
 from app.services.agent_adapter import MockAgentAdapter
 from app.services.security_engine_interface import MockSecurityEngine
-
-app.dependency_overrides[get_agent_adapter] = lambda: MockAgentAdapter()
-app.dependency_overrides[get_security_engine] = lambda: MockSecurityEngine()
 
 client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def run_around_tests():
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_agent_adapter] = lambda: MockAgentAdapter()
+    app.dependency_overrides[get_security_engine] = lambda: MockSecurityEngine()
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+    app.dependency_overrides.pop(get_db, None)
+    app.dependency_overrides.pop(get_agent_adapter, None)
+    app.dependency_overrides.pop(get_security_engine, None)
 
 def test_health_check():
     response = client.get("/health")
@@ -113,6 +114,63 @@ def test_scan_engine_failure():
         scan_response = client.post("/api/v1/scans/", json={"agent_id": agent_id, "test_cases": ["t1"]})
         assert scan_response.status_code == 500
     finally:
-        # Restore mock
         app.dependency_overrides[get_security_engine] = lambda: MockSecurityEngine()
+
+def test_list_endpoints():
+    client.post("/api/v1/agents/", json={"name": "AgentListTest", "description": "Desc"})
+    agents_res = client.get("/api/v1/agents/")
+    assert agents_res.status_code == 200
+    assert len(agents_res.json()) >= 1
+
+    scans_res = client.get("/api/v1/scans/")
+    assert scans_res.status_code == 200
+
+    findings_res = client.get("/api/v1/findings/")
+    assert findings_res.status_code == 200
+
+def test_live_finding_details_flow():
+    from app.database.models import FindingModel, ScanModel, AgentModel
+    import uuid
+
+    db = TestingSessionLocal()
+    agent_id = str(uuid.uuid4())
+    scan_id = str(uuid.uuid4())
+    finding_id = str(uuid.uuid4())
+
+    db.add(AgentModel(id=agent_id, name="LiveAgent", description="Live test agent"))
+    db.add(ScanModel(id=scan_id, agent_id=agent_id, status="completed"))
+    db.add(FindingModel(
+        id=finding_id,
+        scan_id=scan_id,
+        test_id="DI-001",
+        category="direct_prompt_injection",
+        execution_status="completed",
+        outcome="vulnerability_confirmed",
+        expected_behavior="Safe refusal",
+        observed_behavior="Leaked internal canary",
+        evidence="Observed secret canary in output trace",
+        trace_id=None
+    ))
+    db.commit()
+    db.close()
+
+    # 1. Verify scan findings query doesn't fail with 500 ResponseValidationError
+    res_scan = client.get(f"/api/v1/findings/{scan_id}")
+    assert res_scan.status_code == 200
+    findings = res_scan.json()
+    assert len(findings) == 1
+    assert findings[0]["id"] == finding_id
+    assert findings[0]["outcome"] == "vulnerability_confirmed"
+
+    # 2. Verify finding details endpoint
+    res_detail = client.get(f"/api/v1/findings/detail/{finding_id}")
+    assert res_detail.status_code == 200
+    assert res_detail.json()["id"] == finding_id
+    assert res_detail.json()["outcome"] == "vulnerability_confirmed"
+
+    # 3. Verify finding lookup by ID fallback
+    res_by_id = client.get(f"/api/v1/findings/{finding_id}")
+    assert res_by_id.status_code == 200
+    assert len(res_by_id.json()) == 1
+    assert res_by_id.json()[0]["id"] == finding_id
 
